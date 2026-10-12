@@ -2,12 +2,14 @@
 ## Garbage Sorting and Compaction Machine
 
 **Document ID:** HW-001  
-**Version:** 1.0  
-**Status:** Preliminary design
+**Version:** 1.2  
+**Status:** Final (design baseline)
 
 ## 1. Design Summary
 
 The machine consists of a camera-equipped conveyor, three classified sorting stations, an unidentified drop point, a lead-screw compactor carriage, a pneumatic press, and bin ejectors.
+
+The classified bins are named by position: Bin 1, Bin 2, and Bin 3, in order along the conveyor from the camera station. Their waste categories are software settings, so all hardware, wiring labels, and I/O names use the bin number. Each physical bin should carry a removable or rewritable category label so it can be relabeled when an Admin changes its category.
 
 The Raspberry Pi coordinates normal operation through RS485 Modbus RTU digital I/O modules.
 
@@ -19,11 +21,11 @@ Final wiring requires selected part numbers, manufacturer manuals, electrical ca
 |---|---|---|
 | Controller | Raspberry Pi 4, power supply, storage, cooling | Runs control software |
 | Vision station | Camera, mount, lighting | Captures waste images |
-| Conveyor | Belt, frame, motor, drive/starter, station sensors | Moves and positions items |
+| Conveyor | Belt, frame, motor, drive/starter, camera-station item sensor | Moves and positions items by calibrated travel time |
 | Sorting stations | Three cylinders, brackets, valves | Push items into classified bins |
 | Compactor carriage | Linear rails, lead screw, coupler, AC motor | Positions the press |
-| Compaction press | Cylinder, press plate, valve, feedback | Compresses waste |
-| Bin ejectors | Three cylinders, valves, mechanical interfaces | Perform the defined bin-service function |
+| Compaction press | Cylinder, press plate, valve, retracted sensor | Compresses waste |
+| Bin ejectors | Three cylinders, valves, push plates, Home sensors, collection tray or bag | Push the compacted block out of each classified bin |
 | Bin sensing | Three digital laser sensors | Detect full/not-full status |
 | Field I/O | RS485 DI/DO modules and suitable drivers | Interfaces with sensors and actuators |
 | Safety | E-stop, guard switches, safety controller/relay | Inhibits hazardous motion |
@@ -67,6 +69,8 @@ Calculate available cylinder force from pressure and effective piston area. Acco
 ### 3.3 Pneumatic Feedback
 
 - Verify critical cylinder return positions using suitable sensors.
+- Every cylinder has a Home or retracted sensor. No cylinder has an extended sensor.
+- The press is extended for a configured time. The retracted sensor must clear after the extend command and return after release.
 - Use timeouts for expected movement.
 - Treat missing or contradictory feedback as a fault.
 - Define the response to loss of air, loss of power, trapped air, or a broken return spring.
@@ -75,11 +79,14 @@ Calculate available cylinder force from pressure and effective piston area. Acco
 ## 4. Conveyor and Motor Design
 
 - Select the motor and drive/starter based on belt load, speed, acceleration, duty cycle, and stopping accuracy.
-- Use station sensors or encoder feedback if timed movement is not repeatable enough.
+- Position items by timed movement. A single item-present sensor at the camera station (DI-01) is the timing reference. There are no station sensors.
+- Choose a drive with consistent start and stop behavior. A drive with configured ramps or a braking motor improves repeatability.
+- Make each plunger face wide enough along the belt to tolerate the measured stopping variation.
+- Calibrate the travel time to each station and the unidentified drop, and recalibrate after mechanical or drive changes.
 - Provide overload and short-circuit protection.
 - Prevent unexpected restart after power restoration.
 - Guard belt nip points and other moving parts.
-- Validate stop-and-sort repeatability with representative items.
+- Validate stop-and-sort repeatability with representative items of each category.
 
 ## 5. Lead-Screw Carriage
 
@@ -91,7 +98,8 @@ Requirements:
 
 - The press must be retracted before carriage movement.
 - Mechanical end stops must limit travel.
-- Position sensors must confirm Home, Plastic, Can, and Glass positions.
+- Position sensors must confirm Home, Bin 1, Bin 2, and Bin 3 positions.
+- Design the bins, press plate, and compaction force for the hardest waste category that may be assigned to any bin, because categories can be swapped.
 - Use additional limit switches or drive limits where required.
 - The press and carriage must not collide with bins, guards, or other structures.
 - The frame and lead screw must withstand the selected motor and press loads.
@@ -117,52 +125,56 @@ Ordinary relays controlled by a Raspberry Pi are not sufficient as the sole mean
 - Use a timeout if the target is not reached.
 - Do not use elapsed time alone as proof of carriage position.
 
-## 6. Preliminary Digital Input Schedule
+## 6. Bin Ejectors
+
+- Each classified bin has one ejector cylinder with a push plate.
+- Extending the ejector pushes the compacted block out of the bin into a collection tray or bag.
+- The ejector returns by spring force and is confirmed by its Home sensor.
+- The bin-full sensor must read clear after ejection.
+- The operator acknowledges completion before the bin becomes available.
+- Run the ejector only with the press retracted and the carriage at Home.
+- Guard the discharge opening and collection area against crush and ejection hazards.
+
+## 7. Digital Input Schedule
 
 | DI | Signal | Purpose |
 |---|---|---|
-| 01 | Item present | Camera station detection |
-| 02 | Camera station | Conveyor station confirmation |
-| 03 | Plastic station | Conveyor station confirmation |
-| 04 | Can station | Conveyor station confirmation |
-| 05 | Glass station | Conveyor station confirmation |
-| 06 | Unidentified drop station | Optional end-position confirmation |
-| 07 | Plastic bin full | Laser sensor |
-| 08 | Can bin full | Laser sensor |
-| 09 | Glass bin full | Laser sensor |
-| 10 | Carriage Home | Magnetic position sensor |
-| 11 | Carriage Plastic | Magnetic position sensor |
-| 12 | Carriage Can | Magnetic position sensor |
-| 13 | Carriage Glass | Magnetic position sensor |
-| 14 | Press retracted | Critical feedback |
-| 15 | Press extended | Recommended feedback |
-| 16 | Plastic plunger home | Return feedback |
-| 17 | Can plunger home | Return feedback |
-| 18 | Glass plunger home | Return feedback |
-| 19 | Plastic ejector home | Return feedback |
-| 20 | Can ejector home | Return feedback |
-| 21 | Glass ejector home | Return feedback |
-| 22 | Air pressure OK | Pneumatic permissive |
-| 23 | Safety circuit healthy | Auxiliary status only |
-| 24 | Guard closed | Auxiliary status only |
-| 25 | Conveyor drive healthy | Recommended |
-| 26 | Motor overload healthy | Recommended |
-| 27 | Bin service/door status | If required |
-| 28 | Ejection complete | If required |
+| 01 | Item present | Camera station detection and conveyor timing reference |
+| 02 | Bin 1 full | Laser sensor |
+| 03 | Bin 2 full | Laser sensor |
+| 04 | Bin 3 full | Laser sensor |
+| 05 | Carriage Home | Magnetic position sensor |
+| 06 | Carriage Bin 1 | Magnetic position sensor |
+| 07 | Carriage Bin 2 | Magnetic position sensor |
+| 08 | Carriage Bin 3 | Magnetic position sensor |
+| 09 | Press retracted | Critical feedback |
+| 10 | Bin 1 plunger home | Return feedback |
+| 11 | Bin 2 plunger home | Return feedback |
+| 12 | Bin 3 plunger home | Return feedback |
+| 13 | Bin 1 ejector home | Return and service feedback |
+| 14 | Bin 2 ejector home | Return and service feedback |
+| 15 | Bin 3 ejector home | Return and service feedback |
+| 16 | Air pressure OK | Pneumatic permissive |
+| 17 | Safety circuit healthy | Auxiliary status only |
+| 18 | Guard closed | Auxiliary status only |
+| 19 | Conveyor drive healthy | Diagnostic |
+| 20 | Motor overload healthy | Diagnostic |
+
+Mount each bin-full laser sensor with enough margin for one more item, so a reserved sort can finish after the sensor activates.
 
 A safety circuit status signal is for diagnostics. It does not replace the safety circuit's direct safety function.
 
-## 7. Preliminary Digital Output Schedule
+## 8. Digital Output Schedule
 
 | DO | Signal | Purpose |
 |---|---|---|
-| 01 | Plastic sorting valve | Extend plastic plunger |
-| 02 | Can sorting valve | Extend can plunger |
-| 03 | Glass sorting valve | Extend glass plunger |
+| 01 | Bin 1 sorting valve | Extend Bin 1 plunger |
+| 02 | Bin 2 sorting valve | Extend Bin 2 plunger |
+| 03 | Bin 3 sorting valve | Extend Bin 3 plunger |
 | 04 | Press valve | Extend compaction press |
-| 05 | Plastic ejector valve | Extend plastic ejector |
-| 06 | Can ejector valve | Extend can ejector |
-| 07 | Glass ejector valve | Extend glass ejector |
+| 05 | Bin 1 ejector valve | Extend Bin 1 ejector |
+| 06 | Bin 2 ejector valve | Extend Bin 2 ejector |
+| 07 | Bin 3 ejector valve | Extend Bin 3 ejector |
 | 08 | Conveyor run | Command motor interface |
 | 09 | Carriage forward | Command forward movement |
 | 10 | Carriage reverse | Command reverse movement |
@@ -170,9 +182,9 @@ A safety circuit status signal is for diagnostics. It does not replace the safet
 | 12 | Buzzer | Audible alarm |
 | 13 | Ready lamp | Ready indication |
 
-Preliminary estimate: 28 DI and 13 DO. Select modules after confirming the final sensor list, voltage levels, output type, isolation, and spare-channel needs.
+Total: 20 DI and 13 DO. Select modules after confirming voltage levels, output type, isolation, and spare-channel needs.
 
-## 8. Electrical Design Requirements
+## 9. Electrical Design Requirements
 
 - Never connect field voltage directly to Raspberry Pi GPIO.
 - Check whether the remote outputs are relay, sourcing, or sinking type.
@@ -186,7 +198,7 @@ Preliminary estimate: 28 DI and 13 DO. Select modules after confirming the final
 - Provide accessible electrical isolation for maintenance.
 - Follow applicable local electrical requirements.
 
-## 9. RS485 Wiring
+## 10. RS485 Wiring
 
 - Use suitable twisted-pair cable.
 - Prefer a trunk/daisy-chain layout.
@@ -198,7 +210,7 @@ Preliminary estimate: 28 DI and 13 DO. Select modules after confirming the final
 - Route signal cables away from motor and switching-power cables where practical.
 - Test communication while motors and valves switch.
 
-## 10. Safety Checklist
+## 11. Safety Checklist
 
 - [ ] Complete a machine-specific risk assessment.
 - [ ] Identify crush, shear, pinch, entanglement, and ejection hazards.
@@ -216,7 +228,7 @@ Preliminary estimate: 28 DI and 13 DO. Select modules after confirming the final
 - [ ] Document isolation and lockout procedures for maintenance.
 - [ ] Validate safety functions before automatic operation.
 
-## 11. Commissioning Checklist
+## 12. Commissioning Checklist
 
 1. Inspect the mechanical assembly and guards.
 2. Verify wiring against the released schematics.
@@ -227,8 +239,9 @@ Preliminary estimate: 28 DI and 13 DO. Select modules after confirming the final
 7. Test the E-stop and guard interlocks independently of the Pi.
 8. Test motor direction interlocks and overload response.
 9. Test carriage sensors and timeout behavior.
-10. Test RS485 communication with all devices connected.
-11. Run manual actuator tests with the machine in a controlled condition.
-12. Run state-machine simulation tests.
-13. Perform guarded automatic tests.
-14. Record results and approved operating settings before release.
+10. Calibrate conveyor travel times and run the repeatability test for each station.
+11. Test RS485 communication with all devices connected.
+12. Run manual actuator tests with the machine in a controlled condition.
+13. Run state-machine simulation tests.
+14. Perform guarded automatic tests.
+15. Record results and approved operating settings before release.

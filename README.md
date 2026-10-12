@@ -4,31 +4,37 @@ A prototype waste sorting machine using camera-based classification, a conveyor,
 
 ## 1. Project Overview
 
-The machine classifies waste into four destinations:
+The machine sorts waste into four destinations: three classified bins (Bin 1, Bin 2, Bin 3) and one unidentified bin.
 
-- Plastic
-- Can
-- Glass
-- Unidentified
+Each classified bin's waste category is a setting that an Admin can change from the dashboard, chosen from the categories the classifier was trained on. The defaults are:
 
-The conveyor stops at the camera station for classification. Classified items move to their assigned sorting station, where a pneumatic plunger pushes the item into its bin. Unidentified items continue to the end of the conveyor.
+| Bin | Default category |
+|---|---|
+| Bin 1 | Plastic |
+| Bin 2 | Can |
+| Bin 3 | Glass |
 
-A lead-screw carriage positions one pneumatic press over the three classified bins. Each classified bin has a configurable compaction threshold and a digital laser full/not-full sensor.
+For example, an Admin can swap Bin 1 and Bin 2, or assign Paper to a bin once the classifier has been retrained with Paper. Categories can be changed only while the machine is idle and the bin is empty.
+
+The conveyor stops at the camera station for classification. Classified items move to their assigned sorting station using calibrated, timed conveyor movement, and a pneumatic plunger pushes the item into its bin. Unidentified items continue to the end of the conveyor into a bin with a configurable item-count limit.
+
+A lead-screw carriage positions one pneumatic press over the three classified bins. Each classified bin has a configurable compaction threshold, a digital laser full/not-full sensor, and an ejector that pushes the compacted block into a collection tray or bag.
 
 ## 2. Main Features
 
-- Camera-based waste classification.
-- Stop-and-sort conveyor control.
+- Camera-based waste classification with a TensorFlow Lite MobileNet model and label file.
+- Admin-assignable waste category for each classified bin.
+- Stop-and-sort conveyor control with calibrated travel times.
 - Three dedicated pneumatic sorting plungers.
 - Unidentified waste routing.
 - Lead-screw-driven compaction carriage.
 - Four carriage position sensors.
 - Pneumatic compaction press.
-- Three bin ejectors.
-- Full-bin detection.
+- Three push-out bin ejectors.
+- Full-bin detection and an unidentified-bin item limit.
 - RS485 Modbus RTU digital I/O.
 - LCD and physical controls.
-- Local-network dashboard.
+- Local-network dashboard with user login and Viewer, Operator, and Admin roles.
 - SQLite database and CSV export.
 - Analytics and fault history.
 - Timeouts, interlocks, and interrupted-cycle recovery.
@@ -37,12 +43,12 @@ A lead-screw carriage positions one pneumatic press over the three classified bi
 
 - Raspberry Pi 4 Model B.
 - Camera and suitable lighting.
-- Conveyor, motor, and drive/starter.
-- Three single-acting, spring-return sorting cylinders.
+- Conveyor, motor, drive/starter, and one camera-station item sensor.
+- Three single-acting, spring-return sorting cylinders, one per bin.
 - One AC motor-driven lead-screw carriage.
-- Four carriage position sensors: Home, Plastic, Can, and Glass.
-- One single-acting, spring-return compaction press.
-- Three single-acting, spring-return bin ejectors.
+- Four carriage position sensors: Home, Bin 1, Bin 2, and Bin 3.
+- One single-acting, spring-return compaction press with a retracted sensor.
+- Three single-acting, spring-return bin ejectors with Home sensors and a collection tray or bag.
 - Seven suitable 3/2 pneumatic valves, subject to circuit validation.
 - Three digital laser bin-full sensors.
 - RS485 Modbus RTU DI/DO modules.
@@ -58,10 +64,12 @@ The final bill of materials depends on mechanical loads, cylinder dimensions, mo
 | Operating system | Raspberry Pi OS 64-bit |
 | Main language | Python |
 | Camera | OpenCV-compatible camera interface |
+| Classifier | Transfer-learned MobileNet on TensorFlow Lite |
 | Machine control | State machine |
 | Field communication | Modbus RTU |
 | Web API | FastAPI |
-| Dashboard | HTML, CSS, JavaScript |
+| Dashboard | Jinja2 templates, HTML, CSS, JavaScript |
+| Authentication | Server-side sessions, argon2 password hashing, CSRF tokens |
 | Database | SQLite |
 | Export | CSV |
 | Testing | pytest |
@@ -70,10 +78,11 @@ The final bill of materials depends on mechanical loads, cylinder dimensions, mo
 ## 5. Repository Structure
 
 ```text
-garbage-sorting-system/
+garbage-sorting-and-compaction-machine/
 ├── app/
 │   ├── main.py
 │   ├── config.py
+│   ├── cli.py
 │   ├── controller/
 │   ├── hardware/
 │   ├── vision/
@@ -87,6 +96,9 @@ garbage-sorting-system/
 │   ├── database/
 │   ├── images/
 │   └── exports/
+├── models/
+│   ├── waste_classifier.tflite
+│   └── labels.txt
 ├── logs/
 ├── tests/
 │   ├── unit/
@@ -116,14 +128,14 @@ Read the documents in this order:
 5. `05-software-design.md`: code structure, database, API, configuration, and testing.
 6. `06-implementation-plan.md`: development milestones, tests, and risks.
 
-## 7. Initial I/O Estimate
+## 7. I/O Count
 
-| Type | Preliminary count |
+| Type | Count |
 |---|---:|
-| Digital inputs | 28 |
+| Digital inputs | 20 |
 | Digital outputs | 13 |
 
-A 16-channel output module is a possible starting point. Input capacity must cover the final sensor list. Confirm module electrical ratings, isolation, watchdog behavior, register maps, and spare channels before purchasing.
+A 16-channel output module is a possible starting point. Input capacity must cover 20 inputs plus spare channels. Confirm module electrical ratings, isolation, watchdog behavior, register maps, and spare channels before purchasing.
 
 ## 8. Initial Prototype Settings
 
@@ -132,16 +144,21 @@ These are starting values for testing. They are not validated operating limits.
 | Setting | Initial value |
 |---|---:|
 | Vision confidence threshold | 0.80 |
-| Plastic compaction threshold | 10 items |
-| Can compaction threshold | 10 items |
-| Glass compaction threshold | 10 items |
+| Bin 1 / Bin 2 / Bin 3 category | Plastic / Can / Glass |
+| Bin 1, 2, and 3 compaction threshold | 10 items each |
+| Unidentified bin item limit | 30 items |
 | Sensor debounce | 50 ms |
 | Modbus timeout | 1000 ms |
-| Conveyor movement timeout | 10 seconds |
+| Conveyor travel time per station | Calibrate in Milestone 5 |
+| Conveyor maximum travel time | 10 seconds |
 | Carriage movement timeout | 15 seconds |
 | Sorting plunger timeout | 3 seconds |
+| Press extend time | 3 seconds |
 | Press cycle timeout | 10 seconds |
 | Ejector cycle timeout | 10 seconds |
+| Image retention | Low-confidence and unidentified only, 2048 MB / 30 days |
+| Session idle timeout | 30 minutes |
+| Login lockout | 15 minutes after 5 failed attempts |
 
 ## 9. Development Setup
 
@@ -159,7 +176,7 @@ Install any additional operating-system packages required by the selected camera
 ### 9.2 Create the virtual environment
 
 ```bash
-cd garbage-sorting-system
+cd garbage-sorting-and-compaction-machine
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
@@ -172,14 +189,20 @@ Start with the libraries required by your selected hardware and software:
 ```text
 fastapi
 uvicorn
+jinja2
+python-multipart
+itsdangerous
+argon2-cffi
 pymodbus
 opencv-python
+tflite-runtime
+numpy
 PyYAML
 pytest
 httpx
 ```
 
-Pin the versions after testing them together on the Raspberry Pi. Additional dependencies depend on the camera, display, and classifier framework.
+Pin the versions after testing them together on the Raspberry Pi. Additional dependencies depend on the camera and display. Train the classifier with TensorFlow/Keras on a development PC; the Raspberry Pi only needs `tflite-runtime`.
 
 Install the dependencies:
 
@@ -193,9 +216,22 @@ pip install -r requirements.txt
 2. Set the correct serial port and Modbus parameters.
 3. Verify each DI/DO assignment against the tested I/O map.
 4. Configure movement timeouts based on measured hardware behavior.
-5. Keep credentials and machine-specific secrets out of source control.
+5. Set the calibrated conveyor travel time for each station. Automatic operation is rejected until these are set.
+6. Check the initial bin categories. After first start, Admins change them from the dashboard.
+7. Set a random session secret in the `GSCM_SESSION_SECRET` environment variable, for example in the systemd service's environment file.
+8. Keep credentials and machine-specific secrets out of source control.
 
-### 9.5 Run tests
+### 9.5 Create the first Admin account
+
+There is no default login. Create the first Admin on the Raspberry Pi:
+
+```bash
+python -m app.cli create-admin
+```
+
+The command prompts for a username and a password of at least 10 characters. Log in to the dashboard with this account, then create Operator and Viewer accounts from the Users page. Run the same command again to recover access if every Admin password is lost.
+
+### 9.6 Run tests
 
 ```bash
 pytest
@@ -215,6 +251,8 @@ Run simulation tests before connecting live actuators. Test outputs with safe lo
 - Verify remote I/O behavior during RS485 communication loss.
 - Isolate electrical and pneumatic energy before maintenance.
 - Use qualified personnel for electrical work and safety validation.
+- Relabel the physical bin whenever an Admin changes its category.
+- Give the Admin role only to people responsible for machine settings.
 
 ## 11. Development Phases
 
@@ -224,36 +262,40 @@ Run simulation tests before connecting live actuators. Test outputs with safe lo
 4. Test the independent safety circuit.
 5. Validate manual motor and pneumatic operation.
 6. Implement and simulate the state machine.
-7. Integrate conveyor positioning and item tracking.
+7. Calibrate conveyor travel times and integrate item tracking.
 8. Integrate camera classification.
 9. Integrate automatic sorting.
 10. Integrate compaction and bin service.
-11. Add the database, LCD, dashboard, analytics, and CSV export.
+11. Add the database, LCD, web skeleton and login, dashboard, analytics, and CSV export.
 12. Complete commissioning and acceptance tests.
 
-## 12. Decisions to Finalize
+## 12. Design Decisions
 
-- Conveyor motor and drive/starter.
+Functional design decisions are resolved and recorded in `docs/01-product-requirement.md` section 9.
+
+The remaining hardware selections are Milestone 0 bill-of-materials tasks:
+
+- Conveyor motor and drive/starter with repeatable start/stop behavior.
 - AC carriage motor and reversing interface.
 - Cylinder bore, stroke, force, and mounting.
 - Valve voltage and 3/2 valve configuration.
 - RS485 DI/DO module models and electrical output types.
 - Sensor models, polarity, and mounting.
-- Conveyor positioning method.
-- Behavior when a bin fills while an item is in transit.
-- Physical function and completion criteria of the ejectors.
-- Image retention policy.
-- Final classifier and measured test performance.
+
+Measured classifier performance is recorded in the Milestone 6 vision evaluation report.
 
 ## 13. Prototype Acceptance
 
 Before accepting the prototype:
 
 - Test all four routing outcomes.
+- Swap the categories of two empty bins and confirm items follow the new assignment.
+- Test login, role permissions, and lockout.
+- Test conveyor stopping repeatability at each station.
 - Test each pneumatic actuator and its required return feedback.
 - Test all four carriage positions.
 - Test each compaction threshold.
-- Test full-bin blocking and the service sequence.
+- Test full-bin blocking, bin full during transit, the unidentified-bin limit, and the service sequence.
 - Test communication loss and sensor faults.
 - Test interrupted-cycle recovery.
 - Test the emergency stop and guard interlocks independently of the Pi.
