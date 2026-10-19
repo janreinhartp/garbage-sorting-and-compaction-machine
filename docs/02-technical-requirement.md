@@ -2,7 +2,7 @@
 ## Garbage Sorting and Compaction Machine
 
 **Document ID:** TR-001  
-**Version:** 1.3  
+**Version:** 1.4  
 **Status:** Final
 
 ## 1. System Overview
@@ -178,14 +178,18 @@ These values are starting points for bench testing, not validated machine limits
 
 Replace these values with measured and validated settings during commissioning. A timeout must trigger a fault and block unsafe progression.
 
-### 7.1 Timed Conveyor Positioning
+### 7.1 Timed Conveyor Positioning (Stop-and-Sort)
 
+- Primary sequence: stop at the camera, classify, run for the calibrated station travel time, stop, then fire the matching plunger. Do not divert while the belt is running as the primary method.
 - Each move starts with the item detected at the camera station (DI-01).
 - The conveyor runs for the calibrated travel time of the selected station, then stops.
 - DI-01 must clear shortly after the conveyor starts. If the item is still detected, raise FLT-004.
 - No configured travel time may exceed the conveyor maximum travel time.
+- Configuration validation must reject zero or missing station travel times so automatic operation cannot start before calibration.
 - Recalibrate travel times after any change to belt speed, belt tension, motor, drive settings, or station layout.
+- Milestone 5 is a hard gate: automatic sorting must not begin until the repeatability test passes (at least 20 consecutive in-zone stops per station under guarded conditions).
 - Timed positioning applies only to the conveyor. Carriage and cylinder positions must still be confirmed by sensors.
+- Do not use a second camera for conveyor positioning. Station presence sensors are out of the default I/O map; consider them only if Milestone 5 fails after recalibration and contact-zone adjustments.
 
 ## 8. Data Requirements
 

@@ -2,7 +2,7 @@
 ## Garbage Sorting and Compaction Machine
 
 **Document ID:** HW-001  
-**Version:** 1.2  
+**Version:** 1.3  
 **Status:** Final (design baseline)
 
 ## 1. Design Summary
@@ -69,20 +69,23 @@ Calculate available cylinder force from pressure and effective piston area. Acco
 ### 3.3 Pneumatic Feedback
 
 - Verify critical cylinder return positions using suitable sensors.
-- Every cylinder has a Home or retracted sensor. No cylinder has an extended sensor.
+- Every cylinder has a Home or retracted sensor. No cylinder has an extended sensor in the default build.
 - The press is extended for a configured time. The retracted sensor must clear after the extend command and return after release.
 - Use timeouts for expected movement.
 - Treat missing or contradictory feedback as a fault.
+- During commissioning, compare compaction cycle records with the physical compacted result and tighten press timers if incomplete compaction is observed.
 - Define the response to loss of air, loss of power, trapped air, or a broken return spring.
 - Do not use valve output state as proof of cylinder position.
 
 ## 4. Conveyor and Motor Design
 
-- Select the motor and drive/starter based on belt load, speed, acceleration, duty cycle, and stopping accuracy.
-- Position items by timed movement. A single item-present sensor at the camera station (DI-01) is the timing reference. There are no station sensors.
-- Choose a drive with consistent start and stop behavior. A drive with configured ramps or a braking motor improves repeatability.
-- Make each plunger face wide enough along the belt to tolerate the measured stopping variation.
+- The conveyor motor and drive are already selected for this prototype. Work within their measured start/stop behavior; do not assume a drive change for positioning accuracy.
+- Primary sequence is stop-and-sort: the belt stops at the sorting station before the plunger extends. Do not design the plungers as continuous-belt gates for the default build.
+- Position items by timed movement. A single item-present sensor at the camera station (DI-01) is the timing reference. There are no station sensors in the default I/O map.
+- Do not add a second camera for conveyor positioning.
+- Make each plunger face wide enough along the belt to tolerate the measured stopping variation of the chosen drive.
 - Calibrate the travel time to each station and the unidentified drop, and recalibrate after mechanical or drive changes.
+- Milestone 5 is a hard gate: at least 20 consecutive guarded runs per station must stop inside the plunger contact zone before automatic sorting is enabled. If that gate fails after recalibration and contact-zone adjustments, station presence sensors may be considered as a later BOM revision only.
 - Provide overload and short-circuit protection.
 - Prevent unexpected restart after power restoration.
 - Guard belt nip points and other moving parts.

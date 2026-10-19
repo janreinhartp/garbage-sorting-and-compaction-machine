@@ -2,7 +2,7 @@
 ## Garbage Sorting and Compaction Machine
 
 **Document ID:** ARCH-001  
-**Version:** 1.3  
+**Version:** 1.4  
 **Status:** Final
 
 ## 1. Architecture Goals
@@ -192,6 +192,8 @@ SQLite stores:
 
 Use a repository layer so application logic does not depend directly on SQL statements.
 
+Implement the core schema and repositories in Milestone 1 (`items`, `bins`, `machine_events`, `fault_events`, `settings`, and related recovery fields) so interrupted-cycle recovery and counters do not wait for the full dashboard. Add `users`, `sessions`, and `login_attempts` with the Milestone 9 web login work.
+
 ## 5. Operating State Machine
 
 ```mermaid
@@ -255,8 +257,10 @@ Implement exactly these transitions in code and test them. A safety-circuit trip
 - Record the destination bin and the category assigned to it at sort time with the item.
 - Do not route to a full or unavailable bin. If the destination is unavailable at route selection, hold the item at the camera station, pause, and alert the operator.
 - Reserve the destination when the route is selected. If the bin-full sensor activates while the item is in transit, complete the reserved sort and then mark the bin unavailable. Mount the full sensor with enough margin for one more item.
-- Position the conveyor using the calibrated travel time for the selected station. Start timing from the camera-station item sensor and fault if that sensor does not clear after the conveyor starts.
+- Position the conveyor using stop-and-sort: the calibrated travel time for the selected station, then a full stop before the plunger fires. Start timing from the camera-station item sensor and fault if that sensor does not clear after the conveyor starts.
+- Do not use a second camera or continuous gate-while-running diversion as the primary positioning method.
 - Before accepting the next item, pause if the unidentified bin has reached its item-count limit.
+- Automatic sorting must not be enabled until Milestone 5 conveyor repeatability has passed.
 
 ### 6.2 Sorting
 

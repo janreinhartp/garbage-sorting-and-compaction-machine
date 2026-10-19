@@ -16,7 +16,7 @@ Each classified bin's waste category is a setting that an Admin can change from 
 
 For example, an Admin can swap Bin 1 and Bin 2, or assign Paper to a bin once the classifier has been retrained with Paper. Categories can be changed only while the machine is idle and the bin is empty.
 
-The conveyor stops at the camera station for classification. Classified items move to their assigned sorting station using calibrated, timed conveyor movement, and a pneumatic plunger pushes the item into its bin. Unidentified items continue to the end of the conveyor into a bin with a configurable item-count limit.
+The conveyor uses stop-and-sort: it stops at the camera station for classification, runs for a calibrated travel time to the assigned station, stops again, and a pneumatic plunger pushes the item into its bin. Unidentified items continue to the end of the conveyor into a bin with a configurable item-count limit. Automatic sorting is blocked until the Milestone 5 conveyor repeatability gate passes. Positioning does not use a second camera or continuous gate-while-running diversion.
 
 A lead-screw carriage positions one pneumatic press over the three classified bins. Each classified bin has a configurable compaction threshold, a digital laser full/not-full sensor, and an ejector that pushes the compacted block into a collection tray or bag.
 
@@ -111,7 +111,8 @@ garbage-sorting-and-compaction-machine/
 │   ├── 03-system-architecture.md
 │   ├── 04-hardware-design.md
 │   ├── 05-software-design.md
-│   └── 06-implementation-plan.md
+│   ├── 06-implementation-plan.md
+│   └── superpowers/specs/
 ├── requirements.txt
 ├── .gitignore
 └── README.md
@@ -127,6 +128,9 @@ Read the documents in this order:
 4. `04-hardware-design.md`: mechanical, electrical, pneumatic, and I/O design.
 5. `05-software-design.md`: code structure, database, API, configuration, and testing.
 6. `06-implementation-plan.md`: development milestones, tests, and risks.
+7. `docs/superpowers/specs/2026-10-20-technical-risk-hardening-design.md`: risk-hardening decisions (stop-and-sort, M5 hard gate, earlier persistence).
+
+Document set version: **1.4** (hardware design `04` is 1.3).
 
 ## 7. I/O Count
 
@@ -260,26 +264,33 @@ Run simulation tests before connecting live actuators. Test outputs with safe lo
 ## 11. Development Phases
 
 1. Finalize requirements, mechanical design, I/O, and risk assessment.
-2. Build the Raspberry Pi application skeleton.
+2. Build the Raspberry Pi application skeleton and core SQLite persistence.
 3. Validate RS485 and every digital I/O point.
 4. Test the independent safety circuit.
 5. Validate manual motor and pneumatic operation.
-6. Implement and simulate the state machine.
-7. Calibrate conveyor travel times and integrate item tracking.
+6. Implement and simulate the state machine with persistence-backed recovery.
+7. Calibrate conveyor travel times, run the Milestone 5 repeatability hard gate, and integrate item tracking.
 8. Integrate camera classification.
-9. Integrate automatic sorting.
+9. Integrate automatic sorting (only after the Milestone 5 gate passes).
 10. Integrate compaction and bin service.
-11. Add the database, LCD, web skeleton and login, dashboard, analytics, and CSV export.
+11. Add auth, LCD, dashboard, analytics, and CSV export.
 12. Complete commissioning and acceptance tests.
 
 ## 12. Design Decisions
 
 Functional design decisions are resolved and recorded in `docs/01-product-requirement.md` section 9.
 
+Risk-hardening decisions (keep full features, no component change for positioning):
+
+- Stop-and-sort remains the primary conveyor sequence.
+- No second camera for positioning; no continuous plunger-as-gate sequence in the default plan.
+- Milestone 5 conveyor repeatability is a hard gate before automatic sorting.
+- Core database and repositories start in Milestone 1; full dashboard auth stays in Milestone 9.
+- Station presence sensors are a last-resort BOM change only if Milestone 5 fails after recalibration.
+
 The remaining hardware selections are Milestone 0 bill-of-materials tasks:
 
-- Conveyor motor and drive/starter with repeatable start/stop behavior.
-- AC carriage motor and reversing interface.
+- AC carriage motor and reversing interface (conveyor motor/drive already selected; characterize stop behavior in Milestone 5).
 - Cylinder bore, stroke, force, and mounting.
 - Valve voltage and 3/2 valve configuration.
 - RS485 DI/DO module models and electrical output types.

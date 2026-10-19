@@ -2,7 +2,7 @@
 ## Garbage Sorting and Compaction Machine
 
 **Document ID:** SW-001  
-**Version:** 1.3  
+**Version:** 1.4  
 **Status:** Final
 
 ## 1. Technology Stack
@@ -249,7 +249,9 @@ Recommended methods:
 
 `station` is one of `bin1`, `bin2`, `bin3`, or `unidentified`. `move_to_station(station)` requires the item at the camera station (DI-01). It starts the conveyor, checks that DI-01 clears, runs for the configured `conveyor.station_travel_ms[station]`, then stops. It returns a failure if DI-01 does not clear, the drive reports a fault, or the travel time exceeds the configured maximum.
 
-Timed positioning is permitted only for the conveyor and only with travel times calibrated and validated in Milestone 5. Carriage and cylinder positions must always be confirmed by sensors.
+After a successful move, the state machine fires the sorting plunger only while the conveyor is stopped (stop-and-sort). Do not implement continuous gate-while-running diversion or camera-based station positioning in the default software.
+
+Timed positioning is permitted only for the conveyor and only with travel times calibrated and validated in Milestone 5. Automatic sorting integration must refuse to start if travel times are missing or the Milestone 5 repeatability gate has not been recorded as passed in commissioning notes. Carriage and cylinder positions must always be confirmed by sensors.
 
 ### 7.4 Compactor Interface
 
@@ -715,13 +717,14 @@ Operators open the dashboard at `http://gscm.local` (or `http://gscm.local:8000`
 - Unit tests for state transitions, interlocks, configuration, counters, and fault mapping.
 - Unit tests for category mapping: label loading, `bin_for`, assignment rules, duplicate rejection, IDLE and empty-bin checks, and FLT-020 validation.
 - Simulation tests for normal cycles, sensor failures, timeouts, communication loss, restart recovery, bin full during transit, unidentified-bin limit, bin service, and a category swap between runs.
+- Database and repository tests early (Milestone 1 onward) for migrations, item/bin counter transactions, and interrupted-cycle persistence used by recovery.
 - Hardware integration tests for every DI/DO point.
-- Conveyor travel-time calibration and repeatability tests.
+- Conveyor travel-time calibration and repeatability tests (Milestone 5 hard gate: at least 20 consecutive in-zone stops per station).
 - Vision tests using a labeled held-out dataset covering every label.
-- Database tests for transactions and persistence.
 - Authentication tests: login success and failure, generic error message, lockout and unlock, session idle and absolute expiry, logout, session end on disable or role change, and last-Admin protection.
 - Authorization tests: every route rejects unauthenticated requests and roles below its minimum, and no route lacks a role requirement.
 - CSRF tests: state-changing requests without a valid token are rejected.
 - API tests for invalid commands and state restrictions.
 - Guarded machine acceptance tests.
 - Independent safety-function tests for E-stop, guard interlocks, motor interlocks, and energy isolation.
+- Compaction commissioning review: compare cycle records with physical results when press extension is timer-based only.

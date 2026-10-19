@@ -2,12 +2,14 @@
 ## Garbage Sorting and Compaction Machine
 
 **Document ID:** PLAN-001  
-**Version:** 1.3  
+**Version:** 1.4  
 **Status:** Final
 
 ## 1. Objective
 
 Build and validate the prototype in stages. Verify I/O, actuator behavior, safety functions, and control sequences before enabling automatic sorting and compaction.
+
+Technical-risk hardening (2026-10-20): keep the full feature set and the selected components; use stop-and-sort positioning; pull persistence earlier; treat conveyor repeatability as a hard gate before sorting integration. See `docs/superpowers/specs/2026-10-20-technical-risk-hardening-design.md`.
 
 ## 2. Development Principles
 
@@ -16,8 +18,11 @@ Build and validate the prototype in stages. Verify I/O, actuator behavior, safet
 - Use simulated I/O while developing the state machine.
 - Keep safety functions independent of the Raspberry Pi application.
 - Process one item at a time in the initial prototype.
+- Persist core machine state early so recovery and counters are testable before the full dashboard.
 - Record test evidence and unresolved risks.
+- Do not enable automatic sorting before the Milestone 5 conveyor repeatability gate passes.
 - Do not enable automatic operation before the safety review and commissioning checks are complete.
+- Do not change the chosen conveyor drive, add a second positioning camera, or switch to gate-while-running plungers in the default plan.
 
 ## 3. Milestones
 
@@ -26,8 +31,8 @@ Build and validate the prototype in stages. Verify I/O, actuator behavior, safet
 Tasks:
 
 - Review product and technical requirements, including the resolved decisions in `01-product-requirement.md` section 9.
-- Confirm the mechanical layout and dimensions, including the plunger contact width at each station and the ejector collection tray.
-- Select the conveyor motor, carriage motor, drives/starters, cylinders, valves, sensors, I/O modules, power supplies, and safety components. Prefer a conveyor drive with repeatable start/stop behavior.
+- Confirm the mechanical layout and dimensions, including the plunger contact width at each station and the ejector collection tray. Contact width must cover the measured stop scatter of the chosen conveyor drive.
+- Finalize remaining BOM items (cylinders, valves, sensors, I/O modules, power supplies, safety components). The conveyor motor and drive are already selected; document their ratings and expected stop behavior.
 - Prepare wiring diagrams, terminal plans, and pneumatic schematics.
 - Complete the machine-specific risk assessment.
 - Confirm the 15 DI / 13 DO list and spare-channel requirements, with all bin-related signals named by bin position. Air pressure, safety, guards, drive healthy, and motor overload remain hardwired and are not Modbus DI.
@@ -43,7 +48,7 @@ Deliverables:
 
 Exit criteria: no unresolved hardware decision blocks safe bench testing.
 
-### Milestone 1: Controller and Repository Setup
+### Milestone 1: Controller, Repository, and Core Database
 
 Tasks:
 
@@ -54,15 +59,19 @@ Tasks:
 - Set up Git, `.gitignore`, dependency pinning, and pytest.
 - Create the systemd service definition.
 - Implement a basic health/status endpoint.
+- Implement the core SQLite schema and migrations for `items`, `bins`, `machine_events`, `fault_events`, `settings`, and `sensor_snapshots`.
+- Implement the repository layer and transactional counter helpers needed by recovery and later sequencing.
+- Leave `users`, `sessions`, and `login_attempts` for Milestone 9 unless a thin stub is useful for tests.
 
 Deliverables:
 
 - Working controller environment.
 - Version-controlled application skeleton.
 - Configuration example.
+- Core database and repository with unit tests.
 - Initial unit-test workflow.
 
-Exit criteria: the application starts, reports health, and shuts down cleanly.
+Exit criteria: the application starts, applies migrations, reports health, and shuts down cleanly.
 
 ### Milestone 2: RS485 and Digital I/O
 
@@ -107,7 +116,7 @@ Deliverables:
 
 Exit criteria: required safety functions pass their documented tests before automatic sequencing is enabled.
 
-### Milestone 4: State Machine and Fault Handling
+### Milestone 4: State Machine, Persistence-Backed Recovery, and Fault Handling
 
 Tasks:
 
@@ -117,39 +126,43 @@ Tasks:
 - Add timeouts for conveyor, cylinders, carriage, press, and ejectors, plus the press extend timer.
 - Implement destination reservation, the unidentified-bin limit, and the BIN_SERVICE state.
 - Implement the category mapping service with a test label file, including assignment rules and FLT-020 validation at BOOT and PRECHECK.
-- Add interrupted-cycle detection at startup.
+- Persist interrupted-cycle markers and restore them in RECOVERY_CHECK using the Milestone 1 database.
 - Create simulated hardware interfaces.
 - Write unit and simulation tests.
 
 Deliverables:
 
 - Tested state machine.
-- Fault and recovery rules.
+- Fault and recovery rules backed by persisted state.
 - Automated tests for normal and failure paths.
 
 Exit criteria: simulated cycles and expected faults follow the defined transitions.
 
-### Milestone 5: Conveyor and Item Tracking
+### Milestone 5: Conveyor and Item Tracking (Hard Gate)
 
 Tasks:
 
-- Implement conveyor commands and feedback.
+- Implement conveyor commands and feedback for stop-and-sort moves.
 - Validate the camera-station item sensor (DI-01) as the timing reference.
 - Measure and configure the travel time from the camera station to each sorting station and to the unidentified drop.
 - Run the repeatability test: at least 20 consecutive runs per station with representative items of every category in the label file. Record the stopping position of each run.
-- Recalibrate if belt speed, tension, motor, drive settings, or layout change.
+- Confirm each plunger contact zone covers the measured scatter. Adjust layout or face width using existing parts before considering new sensors.
+- Recalibrate if belt speed, tension, drive settings, or layout change.
 - Implement one-item tracking and unique item IDs.
 - Add travel fault handling (DI-01 not clearing, drive fault, maximum travel time).
 - Define a response to unexpected or overlapping items.
+- Record a written pass/fail for the hard gate.
 
 Deliverables:
 
 - Conveyor driver with timed `move_to_station`.
 - Calibrated travel-time settings.
-- Repeatability test record.
+- Repeatability test record with pass/fail decision.
 - Item tracking module.
 
-Exit criteria: every repeatability run stops the item within the plunger contact zone of its station under guarded test conditions.
+Exit criteria: every repeatability run stops the item within the plunger contact zone of its station under guarded test conditions. **Automatic sorting (Milestone 7) must not start until this gate passes.**
+
+Last-resort note: if the gate still fails after recalibration and contact-zone adjustments, a later BOM revision may add station presence sensors. That change is outside the default 15 DI map and is not planned unless this gate fails.
 
 ### Milestone 6: Vision Classification
 
@@ -181,6 +194,8 @@ Exit criteria: the classifier achieves at least 90% correct classification on th
 
 ### Milestone 7: Sorting Integration
 
+Preconditions: Milestone 5 hard gate passed; travel times present and within `max_travel_ms`.
+
 Tasks:
 
 - Connect classification to destination selection through the category-to-bin map.
@@ -188,8 +203,7 @@ Tasks:
 - Record the destination bin and the category assigned to it at sort time.
 - Check bin availability and reserve the destination before routing.
 - Pause and alert the operator when the destination is unavailable.
-- Move to the selected station using its calibrated travel time.
-- Operate only the matching sorting plunger.
+- Move to the selected station using its calibrated travel time, stop, then operate only the matching sorting plunger.
 - Verify return feedback before restarting the conveyor.
 - Complete a reserved sort when the bin-full sensor activates in transit, then mark the bin unavailable.
 - Route unidentified items to the conveyor end and pause at the unidentified-bin limit.
@@ -220,6 +234,7 @@ Tasks:
 - Reset the total and compaction counts after successful ejection.
 - Implement the unidentified-bin count reset command.
 - Require verified bin availability before routing resumes.
+- During guarded tests, compare compaction records with the physical result and adjust timers if needed.
 
 Deliverables:
 
@@ -227,14 +242,15 @@ Deliverables:
 - Bin-service sequence.
 - Compaction and service cycle records.
 - Fault-injection test results.
+- Commissioning notes for press timer validation.
 
 Exit criteria: guarded cycles complete successfully and missing or contradictory feedback produces a fault.
 
-### Milestone 9: LCD, Dashboard, Login, Database, and Export
+### Milestone 9: LCD, Dashboard, Login, Remaining Database, and Export
 
 Tasks:
 
-- Implement the SQLite schema and migrations, including `users`, `sessions`, `login_attempts`, and `bin_category_changes`.
+- Add `users`, `sessions`, `login_attempts`, and `bin_category_changes` to the schema if not already present.
 - Implement LCD pages and button navigation, including bin categories and the service page. Keep the LCD to Operator-level functions.
 - Build the web skeleton: `base.html` layout, role-aware navigation, login and logout pages, error pages for 401 and 403, and empty placeholder pages for every route.
 - Implement authentication: argon2 password hashing, server-side sessions with idle and absolute expiry, CSRF tokens, login lockout, and the `create-admin` command.
@@ -255,7 +271,7 @@ Deliverables:
 - LCD interface.
 - Login-protected local web dashboard with Viewer, Operator, and Admin roles.
 - User management and bin category settings pages.
-- Database and export services.
+- Remaining database tables and export services.
 - Analytics page.
 - API, authentication, authorization, and CSRF tests.
 
@@ -268,7 +284,7 @@ Tasks:
 - Inspect mechanical assembly and guarding.
 - Verify wiring, terminal labels, and electrical protection.
 - Test every I/O point.
-- Re-verify conveyor travel-time calibration on the assembled machine.
+- Re-verify conveyor travel-time calibration on the assembled machine and confirm the Milestone 5 gate still holds.
 - Test safety functions independently of the Pi.
 - Test all routing outcomes.
 - Swap the categories of two empty bins from the Admin page and confirm items route to the new bins.
@@ -291,16 +307,16 @@ Exit criteria: all critical functional and safety tests pass.
 ## 4. Suggested Development Order
 
 1. Requirements, risk assessment, and final I/O list.
-2. Hardware selection and schematics.
-3. Raspberry Pi application skeleton.
+2. Remaining hardware selection and schematics (conveyor drive already chosen).
+3. Raspberry Pi application skeleton and core SQLite persistence.
 4. Modbus I/O diagnostics.
 5. Safety circuit and manual actuator validation.
-6. Simulated state machine and fault handling.
-7. Conveyor travel-time calibration and item tracking.
+6. Simulated state machine, faults, and persistence-backed recovery.
+7. Conveyor travel-time calibration and hard repeatability gate.
 8. Vision classification.
-9. Automatic sorting.
+9. Automatic sorting (only after the Milestone 5 gate passes).
 10. Compaction and bin service.
-11. Database, LCD, web skeleton and login, dashboard, analytics, and CSV.
+11. Auth, LCD, dashboard, analytics, and CSV.
 12. Commissioning and acceptance.
 
 Safety design must not be postponed until the final stage.
@@ -315,7 +331,7 @@ Safety design must not be postponed until the final stage.
 - Every category change creates an audit record with the Admin user ID.
 - History and analytics keep the category recorded at sort time after a category change.
 - Low-confidence items, unknown items, and items whose category has no assigned bin route to unidentified.
-- Each sorting plunger extends and returns.
+- Each sorting plunger extends and returns only after the conveyor has stopped at the station.
 - Counters update only after the sort result is confirmed.
 - Each classified bin has an independent threshold.
 - The carriage reaches Home and each bin position.
@@ -340,6 +356,7 @@ Safety design must not be postponed until the final stage.
 - Item still detected at the camera station after the conveyor starts.
 - Conveyor timing drift (simulated slower belt) causes a missed station.
 - Missing or out-of-range station travel time in configuration.
+- Attempt to enable automatic sorting before the Milestone 5 gate passes.
 - Plunger fails to return.
 - Press does not leave the retracted position after the extend command.
 - Press fails to retract.
@@ -384,8 +401,8 @@ Perform tests under a controlled plan with appropriate guarding and qualified pe
 | Vision misclassification | Wrong bin | Representative data, held-out testing, confidence threshold, unidentified fallback |
 | Item overlap | Incorrect tracking | One-item feed and camera-station item sensing |
 | Bin fills during transit | Overfilled bin or jam | Destination reserved at route selection; full sensor mounted with one-item margin; bin marked unavailable after the reserved sort |
-| Conveyor timing drift | Item stops outside the plunger zone and is mis-sorted or jams | Repeatable drive, wide plunger face, calibration and repeatability tests, recalibration after changes, maximum travel limit |
-| Press extension not sensed | Incomplete compaction goes undetected | Retracted sensor must clear after extend; extend timer; compaction results reviewed during commissioning |
+| Conveyor timing drift | Item stops outside the plunger zone and is mis-sorted or jams | Chosen drive characterized in M5; wide plunger face; calibration and repeatability hard gate; recalibration after changes; maximum travel limit; sorting blocked until gate passes |
+| Press extension not sensed | Incomplete compaction goes undetected | Retracted sensor must clear after extend; extend timer; physical vs recorded result reviewed in commissioning |
 | Unidentified bin overflow | Spill at conveyor end | Configurable item-count limit with pause and operator reset |
 | Ejected block not cleared | Bin stays blocked or jams | Ejector Home feedback, full sensor clear, operator acknowledgement |
 | Carriage position not confirmed | Collision or damage | Position feedback, limits, timeout |
@@ -393,13 +410,14 @@ Perform tests under a controlled plan with appropriate guarding and qualified pe
 | Motor direction conflict | Equipment damage or injury | Hardware-interlocked reversing interface |
 | Modbus loss | Stale commands or feedback | Watchdog and tested output behavior |
 | Cylinder fails to return | Jam or collision | Return feedback and timeout |
-| Power loss mid-cycle | Unknown machine state | Startup recovery and inspection |
-| Database failure | Lost history | Transactions, disk monitoring, backups |
+| Power loss mid-cycle | Unknown machine state | Startup recovery using persisted state and inspection |
+| Database failure | Lost history | Early repository layer, transactions, disk monitoring, backups |
 | Inadequate guarding | Injury | Risk assessment and independent safety validation |
 | Wrong bin category assignment | Items sorted into a bin labeled for another category | Changes only in IDLE with an empty bin, dashboard and LCD show each bin's category, physical bin relabeling step, audit log |
 | New category unsuitable for the bin or press | Jam, damage, or unsafe compaction | Size hardware for the hardest assignable category; only categories in a validated model are selectable |
 | Unauthorized dashboard access | Unsafe commands or changed settings | Login on every route, server-side roles, CSRF tokens, lockout, local-network binding (`gscm.local` only), audit log |
 | Lost Admin password | No one can change settings | Last-Admin protection; `create-admin` command on the Raspberry Pi for recovery |
+| Late persistence (historical) | Weak recovery and counter tests | Core SQLite schema and repositories moved to Milestone 1 |
 
 ## 7. Definition of Done
 
@@ -409,4 +427,5 @@ A milestone is complete when:
 - Relevant tests pass.
 - Hardware changes are reflected in the I/O map and wiring documents.
 - Known limitations and faults are documented.
+- For Milestone 5, the repeatability hard-gate decision is recorded.
 - No unresolved critical safety issue remains before automatic operation.

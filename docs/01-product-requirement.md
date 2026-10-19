@@ -2,7 +2,7 @@
 ## Garbage Sorting and Compaction Machine
 
 **Document ID:** PRD-001  
-**Version:** 1.3  
+**Version:** 1.4  
 **Status:** Final
 
 ## 1. Purpose
@@ -227,7 +227,8 @@ The prototype is ready for acceptance when:
 
 | Topic | Decision |
 |---|---|
-| Conveyor positioning | Timed movement referenced to the camera-station item sensor (DI-01). Travel time is calibrated per station and validated by repeatability tests. No station sensors. |
+| Conveyor positioning | Stop-and-sort with timed movement referenced to the camera-station item sensor (DI-01). Travel time is calibrated per station and validated by a hard Milestone 5 repeatability gate before automatic sorting. No station sensors in the default build. Plunger contact zones must tolerate the measured stop scatter of the chosen drive. |
+| Positioning alternatives rejected | Do not use a second camera for positioning. Do not use continuous belt with plunger-as-gate as the primary sequence. Station presence sensors are a last-resort BOM change only if Milestone 5 fails after recalibration. |
 | Press feedback | Retracted sensor only. Extension is verified by a timer. |
 | Bin ejector function | Pushes the compacted block out of the bin into a collection tray or bag. |
 | Ejector completion | Ejector Home feedback, bin-full sensor clear, then operator acknowledgement on the LCD or dashboard. |
