@@ -2,7 +2,7 @@
 ## Garbage Sorting and Compaction Machine
 
 **Document ID:** PRD-001  
-**Version:** 1.2  
+**Version:** 1.3  
 **Status:** Final
 
 ## 1. Purpose
@@ -167,7 +167,7 @@ Adding a new category, such as Paper, requires a classifier trained with that ca
 - Sessions expire after a period of inactivity.
 - Repeated failed logins lock the account temporarily.
 - State-changing requests are protected against cross-site request forgery.
-- The dashboard is reachable only on the local network.
+- The dashboard is reachable only on the local network, at the hostname `http://gscm.local` (not a public internet site).
 
 ### Usability
 
@@ -238,7 +238,7 @@ The prototype is ready for acceptance when:
 | Classifier | Transfer-learned MobileNet image classifier running on TensorFlow Lite, with a versioned label file. |
 | Image retention | Save only low-confidence and unidentified images, with total-size and age limits. |
 | Bin categories | Bins are identified by position (Bin 1 to 3). An Admin assigns each bin one category from the active label file, only while IDLE and the bin is empty. A category is assigned to at most one bin. Defaults: Plastic, Can, Glass. |
-| Dashboard access | Login required for all pages. Roles: Viewer (read-only and CSV export), Operator (machine commands and bin service), Admin (settings, bin categories, users, model, maintenance). |
+| Dashboard access | Login required for all pages. Roles: Viewer (read-only and CSV export), Operator (machine commands and bin service), Admin (settings, bin categories, users, model, maintenance). LAN URL: `http://gscm.local` via mDNS. |
 | Login implementation | Server-side sessions, argon2 password hashes, CSRF protection, temporary lockout after repeated failures, idle timeout. First Admin created from the command line. |
 | LCD access | No login at the LCD. It offers Operator-level functions only. Bin category assignment and user management are web-Admin only. |
 

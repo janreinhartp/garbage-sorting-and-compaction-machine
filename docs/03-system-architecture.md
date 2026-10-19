@@ -2,7 +2,7 @@
 ## Garbage Sorting and Compaction Machine
 
 **Document ID:** ARCH-001  
-**Version:** 1.2  
+**Version:** 1.3  
 **Status:** Final
 
 ## 1. Architecture Goals
@@ -82,8 +82,10 @@ Remote I/O modules read sensors and command actuator interfaces over RS485 Modbu
 
 I/O count:
 
-- 20 digital inputs.
+- 15 digital inputs.
 - 13 digital outputs.
+
+Air pressure, safety-circuit status, guard status, conveyor drive healthy, and motor overload are hardwired and are not Modbus inputs.
 
 Select modules based on electrical ratings, isolation, channel count, watchdog behavior, environment, and available spare channels.
 
@@ -96,7 +98,7 @@ Select modules based on electrical ratings, isolation, channel count, watchdog b
 - The compaction press uses one single-acting spring-return cylinder with a retracted sensor only.
 - Three bin ejectors use single-acting spring-return cylinders to push compacted blocks into a collection tray or bag.
 - Each cylinder is assumed to use one suitable 3/2 solenoid valve.
-- Required return positions and air pressure are monitored.
+- Required return positions are monitored by Modbus inputs. Air pressure and motor protection are hardwired.
 
 ### 3.4 Safety Layer
 
@@ -239,7 +241,7 @@ stateDiagram-v2
     STOPPING --> FAULT: stop not confirmed
 ```
 
-Implement exactly these transitions in code and test them. A safety-circuit trip removes hazardous energy in hardware regardless of state; the software then enters FAULT when it sees the safety-circuit status input open. Reject any transition that is not shown.
+Implement exactly these transitions in code and test them. A safety-circuit trip removes hazardous energy in hardware regardless of state. There is no Modbus safety-status input; after a trip the operator recovers through the normal recovery path when the machine is safe again. Reject any transition that is not shown.
 
 ## 6. Key Sequence Rules
 
@@ -266,7 +268,7 @@ Implement exactly these transitions in code and test them. A safety-circuit trip
 ### 6.3 Compaction
 
 1. Select the bin with pending compaction.
-2. Confirm safety status, air pressure, and press retraction.
+2. Confirm press retraction and Modbus communication health.
 3. Confirm the carriage position sensors are valid.
 4. Move the carriage to the target bin.
 5. Confirm the target position.
@@ -283,7 +285,7 @@ A compaction is successful when steps 6 to 10 complete without a fault. Then res
 
 A full signal marks the bin unavailable. The operator requests service from IDLE or PAUSED. The service sequence is:
 
-1. Confirm safety status, air pressure, press retracted, and carriage at Home.
+1. Confirm press retracted, carriage at Home, and Modbus communication health.
 2. Extend the selected ejector to push the compacted block into the collection tray or bag.
 3. De-energize the ejector valve and confirm the ejector Home sensor within the ejector cycle timeout.
 4. Confirm the bin-full sensor reads clear.
@@ -344,6 +346,10 @@ flowchart LR
 
 - Bind the dashboard to the intended local interface.
 - Do not expose the service to the public internet by default.
+- Publish the dashboard on the LAN as `http://gscm.local` (mDNS via Avahi). Do not use names such as `gscm.local.com`.
+- Reserve a fixed DHCP lease for the Pi so the hostname stays stable.
+- Optionally put nginx (or Caddy) in front on port 80 so operators open `http://gscm.local` without a port number.
+- Optionally serve HTTPS with a self-signed certificate on the local network.
 - Require login for every page and API endpoint except the login page.
 - Enforce Viewer, Operator, and Admin roles on the server.
 - Store passwords as argon2 hashes. Never store or log plain-text passwords.
@@ -351,7 +357,6 @@ flowchart LR
 - Protect every state-changing request with a CSRF token.
 - Lock an account for 15 minutes after 5 consecutive failed logins, and record each attempt.
 - Create the first Admin account with a command-line command during setup. There is no default password and no self-registration.
-- Optionally serve the dashboard over HTTPS with a self-signed certificate on the local network.
 - Validate commands and configuration values.
 - Keep credentials and the session secret out of source control.
 - Record every state-changing command, settings change, and user-management action with its user ID and result.
@@ -362,6 +367,8 @@ flowchart LR
 - Python virtual environment with tested dependency versions.
 - Configuration separate from source code.
 - SQLite database and image files in designated data directories.
-- systemd service for startup and controlled restart behavior.
+- systemd service for startup and controlled restart behavior (app autorun on boot; sorting does not resume until an Operator starts it).
+- Set the Pi hostname to `gscm` and enable Avahi so clients resolve `gscm.local` on the LAN.
+- Optional reverse proxy on port 80 for `http://gscm.local`.
 - Log rotation to prevent storage exhaustion.
 - Documented backup and export procedures.

@@ -34,7 +34,7 @@ A lead-screw carriage positions one pneumatic press over the three classified bi
 - Full-bin detection and an unidentified-bin item limit.
 - RS485 Modbus RTU digital I/O.
 - LCD and physical controls.
-- Local-network dashboard with user login and Viewer, Operator, and Admin roles.
+- Local-network dashboard with user login and Viewer, Operator, and Admin roles at `http://gscm.local`.
 - SQLite database and CSV export.
 - Analytics and fault history.
 - Timeouts, interlocks, and interrupted-cycle recovery.
@@ -132,10 +132,10 @@ Read the documents in this order:
 
 | Type | Count |
 |---|---:|
-| Digital inputs | 20 |
+| Digital inputs | 15 |
 | Digital outputs | 13 |
 
-A 16-channel output module is a possible starting point. Input capacity must cover 20 inputs plus spare channels. Confirm module electrical ratings, isolation, watchdog behavior, register maps, and spare channels before purchasing.
+A 16-channel output module is a possible starting point. Input capacity must cover 15 inputs plus spare channels. Air pressure, E-stop/guards, drive protection, and motor overload are hardwired and are not counted as Modbus DI. Confirm module electrical ratings, isolation, watchdog behavior, register maps, and spare channels before purchasing.
 
 ## 8. Initial Prototype Settings
 
@@ -219,7 +219,8 @@ pip install -r requirements.txt
 5. Set the calibrated conveyor travel time for each station. Automatic operation is rejected until these are set.
 6. Check the initial bin categories. After first start, Admins change them from the dashboard.
 7. Set a random session secret in the `GSCM_SESSION_SECRET` environment variable, for example in the systemd service's environment file.
-8. Keep credentials and machine-specific secrets out of source control.
+8. Set the Pi hostname to `gscm`, enable Avahi/mDNS, and reserve a fixed DHCP lease on the router so clients open `http://gscm.local` (or `http://gscm.local:8000` without a reverse proxy). Do not use `gscm.local.com`.
+9. Keep credentials and machine-specific secrets out of source control.
 
 ### 9.5 Create the first Admin account
 
@@ -229,7 +230,9 @@ There is no default login. Create the first Admin on the Raspberry Pi:
 python -m app.cli create-admin
 ```
 
-The command prompts for a username and a password of at least 10 characters. Log in to the dashboard with this account, then create Operator and Viewer accounts from the Users page. Run the same command again to recover access if every Admin password is lost.
+The command prompts for a username and a password of at least 10 characters. Open `http://gscm.local`, log in with this account, then create Operator and Viewer accounts from the Users page. Run the same command again to recover access if every Admin password is lost.
+
+The dashboard stays on the local network only. `gscm.local` is a friendly LAN hostname (mDNS), not a public internet site.
 
 ### 9.6 Run tests
 

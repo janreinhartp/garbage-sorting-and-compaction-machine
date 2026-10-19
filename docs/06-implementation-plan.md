@@ -2,7 +2,7 @@
 ## Garbage Sorting and Compaction Machine
 
 **Document ID:** PLAN-001  
-**Version:** 1.2  
+**Version:** 1.3  
 **Status:** Final
 
 ## 1. Objective
@@ -30,7 +30,7 @@ Tasks:
 - Select the conveyor motor, carriage motor, drives/starters, cylinders, valves, sensors, I/O modules, power supplies, and safety components. Prefer a conveyor drive with repeatable start/stop behavior.
 - Prepare wiring diagrams, terminal plans, and pneumatic schematics.
 - Complete the machine-specific risk assessment.
-- Confirm the 20 DI / 13 DO list and spare-channel requirements, with all bin-related signals named by bin position.
+- Confirm the 15 DI / 13 DO list and spare-channel requirements, with all bin-related signals named by bin position. Air pressure, safety, guards, drive healthy, and motor overload remain hardwired and are not Modbus DI.
 - Size the bins, press, and ejectors for the hardest category that may be assigned to any bin.
 
 Deliverables:
@@ -244,7 +244,10 @@ Tasks:
 - Build the Admin pages: settings, bin categories, active model, users, and maintenance.
 - Add configuration validation and audit logging with user IDs.
 - Implement CSV exports and analytics.
-- Restrict dashboard access to the local network, and optionally enable HTTPS with a self-signed certificate.
+- Restrict dashboard access to the local network.
+- Set the Pi hostname to `gscm`, enable Avahi/mDNS, and reserve a fixed DHCP lease so the dashboard opens as `http://gscm.local`.
+- Optionally add a reverse proxy on port 80 so the URL needs no port number. Optionally enable HTTPS with a self-signed certificate.
+- Do not use public-domain-style names such as `gscm.local.com`.
 - Verify UI handlers cannot bypass the state machine.
 
 Deliverables:
@@ -342,10 +345,9 @@ Safety design must not be postponed until the final stage.
 - Press fails to retract.
 - Ejector fails to return Home.
 - Bin-full sensor still active after ejection.
-- Low air pressure.
 - Carriage movement timeout.
-- Motor overload or drive fault.
 - Database write failure.
+- Hardwired air-pressure, safety, guard, drive, and overload trips (verify hardware inhibits motion; software may only see secondary timeouts).
 - Power loss during a cycle.
 - Restart with an unresolved interrupted cycle.
 - Assigned category missing from a newly selected label file (FLT-020 blocks start).
@@ -396,7 +398,7 @@ Perform tests under a controlled plan with appropriate guarding and qualified pe
 | Inadequate guarding | Injury | Risk assessment and independent safety validation |
 | Wrong bin category assignment | Items sorted into a bin labeled for another category | Changes only in IDLE with an empty bin, dashboard and LCD show each bin's category, physical bin relabeling step, audit log |
 | New category unsuitable for the bin or press | Jam, damage, or unsafe compaction | Size hardware for the hardest assignable category; only categories in a validated model are selectable |
-| Unauthorized dashboard access | Unsafe commands or changed settings | Login on every route, server-side roles, CSRF tokens, lockout, local-network binding, audit log |
+| Unauthorized dashboard access | Unsafe commands or changed settings | Login on every route, server-side roles, CSRF tokens, lockout, local-network binding (`gscm.local` only), audit log |
 | Lost Admin password | No one can change settings | Last-Admin protection; `create-admin` command on the Raspberry Pi for recovery |
 
 ## 7. Definition of Done

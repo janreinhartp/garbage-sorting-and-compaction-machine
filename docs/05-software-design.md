@@ -2,7 +2,7 @@
 ## Garbage Sorting and Compaction Machine
 
 **Document ID:** SW-001  
-**Version:** 1.2  
+**Version:** 1.3  
 **Status:** Final
 
 ## 1. Technology Stack
@@ -131,7 +131,7 @@ garbage-sorting-and-compaction-machine/
 | BOOT | Load configuration, the label file, and the bin category map, and initialize services |
 | RECOVERY_CHECK | Inspect saved state, I/O health, and interrupted cycles |
 | IDLE | Wait for an authorized start command; Admin category changes are allowed here |
-| PRECHECK | Check safety status, communication, sensors, pressure, bins, and the category map |
+| PRECHECK | Check communication, sensors, bins, and the category map |
 | ITEM_DETECT | Wait for an item at the camera station |
 | CLASSIFY | Capture image and classify item |
 | ROUTE_SELECT | Look up the bin for the predicted category, check availability, and reserve the destination |
@@ -158,7 +158,7 @@ Implement these software checks as additional protection:
 3. Do not command forward and reverse simultaneously.
 4. Do not start another cycle until required actuator return feedback is valid.
 5. Do not route items to full or unavailable bins. A destination reserved before the bin became full may complete its sort.
-6. Do not run pneumatic cycles when air pressure is below the validated threshold.
+6. Do not rely on software for air-pressure or safety-circuit permissives; those are hardwired.
 7. Do not progress using stale, missing, or contradictory sensor readings.
 8. Do not automatically resume hazardous motion after a fault or restart.
 9. Restrict maintenance commands to the Admin role and to states where required conditions are met.
@@ -166,7 +166,7 @@ Implement these software checks as additional protection:
 11. Do not accept a new item while the unidentified bin is at its item-count limit.
 12. Do not change a bin's category unless the machine is IDLE and the bin's `total_count` is 0.
 13. Do not start if the category map is invalid (FLT-020).
-14. Treat safety-circuit feedback as diagnostic information. The safety hardware must perform the safety function directly.
+14. Do not expect Modbus inputs for air pressure, E-stop/guards, drive healthy, or motor overload. Safety and protection remain hardwired.
 
 ## 6. Vision Pipeline
 
@@ -692,6 +692,7 @@ modbus:
 web:
   host: 0.0.0.0          # bind to the local network interface
   port: 8000
+  public_hostname: gscm.local
   session_secret_env: GSCM_SESSION_SECRET
   session_idle_minutes: 30
   session_max_hours: 12
@@ -706,6 +707,8 @@ web:
 These are initial values only. Confirm serial settings and timings against the selected hardware before operation. Configuration validation must reject a zero or missing station travel time and any travel time above `max_travel_ms`, so automatic operation cannot start before calibration.
 
 The `bins` values seed the database on first start. After that, the database is authoritative for bin categories, thresholds, and the unidentified limit, and Admins change them from the dashboard. The session secret is read from an environment variable and is never stored in the repository.
+
+Operators open the dashboard at `http://gscm.local` (or `http://gscm.local:8000` if no reverse proxy is used). The name is LAN-only via mDNS. It is not a public internet domain.
 
 ## 15. Testing Strategy
 

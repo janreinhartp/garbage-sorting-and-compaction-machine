@@ -2,7 +2,7 @@
 ## Garbage Sorting and Compaction Machine
 
 **Document ID:** TR-001  
-**Version:** 1.2  
+**Version:** 1.3  
 **Status:** Final
 
 ## 1. System Overview
@@ -32,7 +32,7 @@ The three classified bins are identified by position: Bin 1, Bin 2, and Bin 3. H
 | HW-011 | Pneumatic valves | Suitable 3/2 valves, subject to circuit validation |
 | HW-012 | Remote I/O | RS485 Modbus RTU DI/DO modules |
 | HW-013 | Local interface | LCD and physical buttons |
-| HW-014 | Web interface | Login-protected local-network dashboard |
+| HW-014 | Web interface | Login-protected local-network dashboard at `http://gscm.local` |
 | HW-015 | Database | SQLite |
 | HW-016 | Safety circuit | Emergency stop, guard interlocks, and required motion inhibits |
 | HW-017 | Motor protection | Suitable overload and short-circuit protection |
@@ -64,6 +64,7 @@ The three classified bins are identified by position: Bin 1, Bin 2, and Bin 3. H
 | SW-020 | Allow bin category changes only in IDLE, only for an empty bin, only to a category in the active label file, and with each category assigned to at most one bin. |
 | SW-021 | Validate at startup that every assigned category exists in the active label file. |
 | SW-022 | Require login for all dashboard pages and API endpoints except the login page, and enforce Viewer, Operator, and Admin roles on the server. |
+| SW-025 | Publish the dashboard on the LAN as `gscm.local` using mDNS (Avahi), with a fixed DHCP reservation for the Pi. | |
 | SW-023 | Store passwords as argon2 hashes, use server-side sessions with an idle timeout, protect state-changing requests with CSRF tokens, and lock accounts temporarily after repeated failed logins. |
 | SW-024 | Record the user ID with every command, settings change, and user-management action. |
 
@@ -88,13 +89,17 @@ Confirm signal voltage, polarity, isolation, module input type, and terminal ass
 | DI-13 | Bin 1 ejector home | Confirm return and service completion |
 | DI-14 | Bin 2 ejector home | Confirm return and service completion |
 | DI-15 | Bin 3 ejector home | Confirm return and service completion |
-| DI-16 | Air pressure OK | Pneumatic permissive |
-| DI-17 | Safety circuit healthy | Auxiliary status feedback |
-| DI-18 | Guard closed | Auxiliary status feedback |
-| DI-19 | Conveyor drive healthy | Diagnostic input |
-| DI-20 | Motor overload healthy | Diagnostic input |
 
-**Total: 20 digital inputs.** Conveyor station sensors, a press-extended sensor, and separate ejection-complete or service-door inputs are not used. Do not remove critical feedback only to fit a smaller module, and keep spare channels for later additions.
+**Total: 15 digital inputs.**
+
+The following are hardwired and are **not** Modbus digital inputs to the Raspberry Pi:
+
+- Air-pressure permissive and pneumatic isolation.
+- Emergency stop and guard interlocks (safety circuit).
+- Conveyor drive protection.
+- Motor overload and short-circuit protection.
+
+They inhibit hazardous motion or energy in hardware. The Pi does not use them for sequencing. Keep spare Modbus channels for later additions.
 
 ## 5. Digital Output Map
 
@@ -206,23 +211,22 @@ Store timestamps in UTC and display local time in the interface. Save images onl
 | FLT-001 | RS485 communication lost | Stop sequence progression and enter a communication fault |
 | FLT-002 | Camera unavailable | Prevent new classification and untracked routing |
 | FLT-003 | Classification failed | Use unidentified routing only if tracking and route conditions remain valid |
-| FLT-004 | Conveyor travel failed (item still at camera station after start, or drive not healthy) | Stop conveyor and raise fault |
+| FLT-004 | Conveyor travel failed (item still at camera station after start, or travel exceeds the maximum) | Stop conveyor and raise fault |
 | FLT-005 | Plunger failed to return | Inhibit conveyor movement |
 | FLT-006 | Carriage position timeout | Stop carriage motion and raise fault |
 | FLT-007 | Contradictory position sensors | Inhibit press and carriage motion |
 | FLT-008 | Press failed to retract | Inhibit carriage movement |
-| FLT-009 | Low air pressure | Inhibit pneumatic cycles |
 | FLT-010 | Bin full | Complete any reserved sort, then mark bin unavailable |
 | FLT-011 | Ejector/service failed (ejector not Home or full sensor still active) | Keep bin unavailable pending inspection |
-| FLT-012 | Safety circuit open | Safety hardware inhibits hazardous motion |
 | FLT-013 | Interrupted cycle | Require startup recovery checks |
 | FLT-014 | Database write failure | Prevent silent data loss and enter defined degraded state |
-| FLT-015 | Motor overload or drive fault | Remove motion command and require inspection |
 | FLT-016 | Conflicting direction commands | Block motion and report a fault |
 | FLT-017 | Unidentified bin item limit reached | Pause before the next item and require an operator count reset |
 | FLT-018 | Press did not leave retracted position after extend command | De-energize press valve, keep compaction pending, and raise fault |
 | FLT-019 | Destination unavailable at route selection | Hold the item at the camera station, pause, and alert the operator |
 | FLT-020 | Invalid bin category assignment (category missing from the active label file, or assigned to more than one bin) | Block start, show the affected bin, and require an Admin to correct the assignment |
+
+FLT-009 (low air pressure), FLT-012 (safety circuit open), and FLT-015 (motor overload or drive fault) are reserved and unused. Those conditions are handled by hardwired circuits. Software may still see secondary effects such as plunger, press, ejector, conveyor, or carriage timeouts.
 
 ## 10. Verification
 

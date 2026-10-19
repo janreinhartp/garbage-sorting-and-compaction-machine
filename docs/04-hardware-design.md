@@ -154,15 +154,10 @@ Ordinary relays controlled by a Raspberry Pi are not sufficient as the sole mean
 | 13 | Bin 1 ejector home | Return and service feedback |
 | 14 | Bin 2 ejector home | Return and service feedback |
 | 15 | Bin 3 ejector home | Return and service feedback |
-| 16 | Air pressure OK | Pneumatic permissive |
-| 17 | Safety circuit healthy | Auxiliary status only |
-| 18 | Guard closed | Auxiliary status only |
-| 19 | Conveyor drive healthy | Diagnostic |
-| 20 | Motor overload healthy | Diagnostic |
 
 Mount each bin-full laser sensor with enough margin for one more item, so a reserved sort can finish after the sensor activates.
 
-A safety circuit status signal is for diagnostics. It does not replace the safety circuit's direct safety function.
+Air-pressure permissive, emergency stop, guard interlocks, conveyor drive protection, and motor overload protection are hardwired. They are not Modbus digital inputs to the Raspberry Pi.
 
 ## 8. Digital Output Schedule
 
@@ -182,7 +177,7 @@ A safety circuit status signal is for diagnostics. It does not replace the safet
 | 12 | Buzzer | Audible alarm |
 | 13 | Ready lamp | Ready indication |
 
-Total: 20 DI and 13 DO. Select modules after confirming voltage levels, output type, isolation, and spare-channel needs.
+Total: 15 DI and 13 DO. Select modules after confirming voltage levels, output type, isolation, and spare-channel needs.
 
 ## 9. Electrical Design Requirements
 
